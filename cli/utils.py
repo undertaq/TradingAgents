@@ -3,7 +3,9 @@ from typing import List, Optional, Tuple, Dict
 
 from rich.console import Console
 
+from cli.i18n import set_language, t, tr_agent
 from cli.models import AnalystType
+from tradingagents.default_config import DEFAULT_CONFIG
 
 console = Console()
 
@@ -11,17 +13,41 @@ TICKER_INPUT_EXAMPLES = "Examples: SPY, CNC.TO, 7203.T, 0700.HK"
 
 ANALYST_ORDER = [
     ("Market Analyst", AnalystType.MARKET),
-    ("Social Media Analyst", AnalystType.SOCIAL),
+    ("Social Analyst", AnalystType.SOCIAL),
     ("News Analyst", AnalystType.NEWS),
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
 ]
 
 
+def prioritize_default_option(
+    options: list[tuple[str, str]], default_value: str | None
+) -> list[tuple[str, str]]:
+    if not default_value:
+        return options
+    prioritized = [option for option in options if option[1] == default_value]
+    prioritized.extend(option for option in options if option[1] != default_value)
+    return prioritized
+
+
+def select_language() -> str:
+    choice = questionary.select(
+        t("language_prompt"),
+        choices=[
+            questionary.Choice(t("language_english"), value="en"),
+            questionary.Choice(t("language_zh_tw"), value="zh-TW"),
+        ],
+    ).ask()
+    if not choice:
+        choice = "en"
+    set_language(choice)
+    return choice
+
+
 def get_ticker() -> str:
     """Prompt the user to enter a ticker symbol."""
     ticker = questionary.text(
-        f"Enter the exact ticker symbol to analyze ({TICKER_INPUT_EXAMPLES}):",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
+        f"{t('step_1_prompt')}:",
+        validate=lambda x: len(x.strip()) > 0 or t("error_invalid_ticker"),
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -31,7 +57,7 @@ def get_ticker() -> str:
     ).ask()
 
     if not ticker:
-        console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_ticker')}[/red]")
         exit(1)
 
     return normalize_ticker_symbol(ticker)
@@ -57,9 +83,8 @@ def get_analysis_date() -> str:
             return False
 
     date = questionary.text(
-        "Enter the analysis date (YYYY-MM-DD):",
-        validate=lambda x: validate_date(x.strip())
-        or "Please enter a valid date in YYYY-MM-DD format.",
+        f"{t('step_2_prompt')}:",
+        validate=lambda x: validate_date(x.strip()) or t("error_invalid_date"),
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -69,7 +94,7 @@ def get_analysis_date() -> str:
     ).ask()
 
     if not date:
-        console.print("\n[red]No date provided. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_date')}[/red]")
         exit(1)
 
     return date.strip()
@@ -78,12 +103,13 @@ def get_analysis_date() -> str:
 def select_analysts() -> List[AnalystType]:
     """Select analysts using an interactive checkbox."""
     choices = questionary.checkbox(
-        "Select Your [Analysts Team]:",
+        f"{t('step_3_prompt')}:",
         choices=[
-            questionary.Choice(display, value=value) for display, value in ANALYST_ORDER
+            questionary.Choice(tr_agent(display), value=value)
+            for display, value in ANALYST_ORDER
         ],
-        instruction="\n- Press Space to select/unselect analysts\n- Press 'a' to select/unselect all\n- Press Enter when done",
-        validate=lambda x: len(x) > 0 or "You must select at least one analyst.",
+        instruction=f"\n- {t('instruction_checkbox')}",
+        validate=lambda x: len(x) > 0 or t("error_no_analysts"),
         style=questionary.Style(
             [
                 ("checkbox-selected", "fg:green"),
@@ -95,7 +121,7 @@ def select_analysts() -> List[AnalystType]:
     ).ask()
 
     if not choices:
-        console.print("\n[red]No analysts selected. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_analysts')}[/red]")
         exit(1)
 
     return choices
@@ -106,17 +132,17 @@ def select_research_depth() -> int:
 
     # Define research depth options with their corresponding values
     DEPTH_OPTIONS = [
-        ("Shallow - Quick research, few debate and strategy discussion rounds", 1),
-        ("Medium - Middle ground, moderate debate rounds and strategy discussion", 3),
-        ("Deep - Comprehensive research, in depth debate and strategy discussion", 5),
+        (t("research_depth_shallow"), 1),
+        (t("research_depth_medium"), 3),
+        (t("research_depth_deep"), 5),
     ]
 
     choice = questionary.select(
-        "Select Your [Research Depth]:",
+        f"{t('step_4_prompt')}:",
         choices=[
             questionary.Choice(display, value=value) for display, value in DEPTH_OPTIONS
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=f"\n- {t('instruction_select')}",
         style=questionary.Style(
             [
                 ("selected", "fg:yellow noinherit"),
@@ -127,7 +153,7 @@ def select_research_depth() -> int:
     ).ask()
 
     if choice is None:
-        console.print("\n[red]No research depth selected. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_research_depth')}[/red]")
         exit(1)
 
     return choice
@@ -157,6 +183,11 @@ def select_shallow_thinking_agent(provider) -> str:
             ("Gemini 3.1 Flash Lite - Most cost-efficient", "gemini-3.1-flash-lite-preview"),
             ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
         ],
+        "groq": [
+            ("Llama 3.1 8B Instant - Lowest latency", "llama-3.1-8b-instant"),
+            ("GPT-OSS 20B - Fast open-weight reasoning", "openai/gpt-oss-20b"),
+            ("Llama 3.3 70B Versatile - Strong general purpose", "llama-3.3-70b-versatile"),
+        ],
         "xai": [
             ("Grok 4.1 Fast (Non-Reasoning) - Speed optimized, 2M ctx", "grok-4-1-fast-non-reasoning"),
             ("Grok 4 Fast (Non-Reasoning) - Speed optimized", "grok-4-fast-non-reasoning"),
@@ -167,19 +198,23 @@ def select_shallow_thinking_agent(provider) -> str:
             ("Z.AI GLM 4.5 Air (free)", "z-ai/glm-4.5-air:free"),
         ],
         "ollama": [
+            ("Qwen3.5 27B (local)", "qwen3.5:27b"),
             ("Qwen3:latest (8B, local)", "qwen3:latest"),
             ("GPT-OSS:latest (20B, local)", "gpt-oss:latest"),
             ("GLM-4.7-Flash:latest (30B, local)", "glm-4.7-flash:latest"),
         ],
     }
+    default_model = DEFAULT_CONFIG.get("quick_think_llm")
+    options = prioritize_default_option(
+        SHALLOW_AGENT_OPTIONS[provider.lower()], default_model
+    )
 
     choice = questionary.select(
-        "Select Your [Quick-Thinking LLM Engine]:",
+        t("quick_thinking_prompt"),
         choices=[
-            questionary.Choice(display, value=value)
-            for display, value in SHALLOW_AGENT_OPTIONS[provider.lower()]
+            questionary.Choice(display, value=value) for display, value in options
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=f"\n- {t('instruction_select')}",
         style=questionary.Style(
             [
                 ("selected", "fg:magenta noinherit"),
@@ -190,9 +225,7 @@ def select_shallow_thinking_agent(provider) -> str:
     ).ask()
 
     if choice is None:
-        console.print(
-            "\n[red]No shallow thinking llm engine selected. Exiting...[/red]"
-        )
+        console.print(f"\n[red]{t('error_no_shallow')}[/red]")
         exit(1)
 
     return choice
@@ -223,6 +256,12 @@ def select_deep_thinking_agent(provider) -> str:
             ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
         ],
+        "groq": [
+            ("Llama 3.3 70B Versatile - Strongest default Groq option", "llama-3.3-70b-versatile"),
+            ("Kimi K2 Instruct - Larger reasoning-oriented model", "moonshotai/kimi-k2-instruct-0905"),
+            ("GPT-OSS 120B - Highest-capacity open-weight option", "openai/gpt-oss-120b"),
+            ("GPT-OSS 20B - Faster open-weight reasoning", "openai/gpt-oss-20b"),
+        ],
         "xai": [
             ("Grok 4 - Flagship model", "grok-4-0709"),
             ("Grok 4.1 Fast (Reasoning) - High-performance, 2M ctx", "grok-4-1-fast-reasoning"),
@@ -234,19 +273,23 @@ def select_deep_thinking_agent(provider) -> str:
             ("NVIDIA Nemotron 3 Nano 30B (free)", "nvidia/nemotron-3-nano-30b-a3b:free"),
         ],
         "ollama": [
+            ("Qwen3.5 27B (local)", "qwen3.5:27b"),
             ("GLM-4.7-Flash:latest (30B, local)", "glm-4.7-flash:latest"),
             ("GPT-OSS:latest (20B, local)", "gpt-oss:latest"),
             ("Qwen3:latest (8B, local)", "qwen3:latest"),
         ],
     }
+    default_model = DEFAULT_CONFIG.get("deep_think_llm")
+    options = prioritize_default_option(
+        DEEP_AGENT_OPTIONS[provider.lower()], default_model
+    )
 
     choice = questionary.select(
-        "Select Your [Deep-Thinking LLM Engine]:",
+        t("deep_thinking_prompt"),
         choices=[
-            questionary.Choice(display, value=value)
-            for display, value in DEEP_AGENT_OPTIONS[provider.lower()]
+            questionary.Choice(display, value=value) for display, value in options
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=f"\n- {t('instruction_select')}",
         style=questionary.Style(
             [
                 ("selected", "fg:magenta noinherit"),
@@ -257,7 +300,7 @@ def select_deep_thinking_agent(provider) -> str:
     ).ask()
 
     if choice is None:
-        console.print("\n[red]No deep thinking llm engine selected. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_deep')}[/red]")
         exit(1)
 
     return choice
@@ -269,18 +312,34 @@ def select_llm_provider() -> tuple[str, str]:
         ("OpenAI", "https://api.openai.com/v1"),
         ("Google", "https://generativelanguage.googleapis.com/v1"),
         ("Anthropic", "https://api.anthropic.com/"),
+        ("Groq", "https://api.groq.com/openai/v1"),
         ("xAI", "https://api.x.ai/v1"),
         ("Openrouter", "https://openrouter.ai/api/v1"),
         ("Ollama", "http://localhost:11434/v1"),
     ]
+    provider_defaults = {
+        "openai": "OpenAI",
+        "google": "Google",
+        "anthropic": "Anthropic",
+        "groq": "Groq",
+        "xai": "xAI",
+        "openrouter": "Openrouter",
+        "ollama": "Ollama",
+    }
+    default_provider = provider_defaults.get(DEFAULT_CONFIG.get("llm_provider", "").lower())
+    ordered_urls = BASE_URLS
+    if default_provider:
+        ordered_urls = [
+            option for option in BASE_URLS if option[0] == default_provider
+        ] + [option for option in BASE_URLS if option[0] != default_provider]
     
     choice = questionary.select(
-        "Select your LLM Provider:",
+        t("provider_prompt"),
         choices=[
             questionary.Choice(display, value=(display, value))
-            for display, value in BASE_URLS
+            for display, value in ordered_urls
         ],
-        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        instruction=f"\n- {t('instruction_select')}",
         style=questionary.Style(
             [
                 ("selected", "fg:magenta noinherit"),
@@ -291,11 +350,11 @@ def select_llm_provider() -> tuple[str, str]:
     ).ask()
     
     if choice is None:
-        console.print("\n[red]no OpenAI backend selected. Exiting...[/red]")
+        console.print(f"\n[red]{t('error_no_provider')}[/red]")
         exit(1)
     
     display_name, url = choice
-    print(f"You selected: {display_name}\tURL: {url}")
+    console.print(f"[green]{t('provider_selected')}:[/green] {display_name} ({url})")
 
     return display_name, url
 
@@ -303,12 +362,12 @@ def select_llm_provider() -> tuple[str, str]:
 def ask_openai_reasoning_effort() -> str:
     """Ask for OpenAI reasoning effort level."""
     choices = [
-        questionary.Choice("Medium (Default)", "medium"),
-        questionary.Choice("High (More thorough)", "high"),
-        questionary.Choice("Low (Faster)", "low"),
+        questionary.Choice(t("effort_medium_default"), "medium"),
+        questionary.Choice(t("effort_high_thorough"), "high"),
+        questionary.Choice(t("effort_low_fast"), "low"),
     ]
     return questionary.select(
-        "Select Reasoning Effort:",
+        t("reasoning_select"),
         choices=choices,
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
@@ -324,11 +383,11 @@ def ask_anthropic_effort() -> str | None:
     Controls token usage and response thoroughness on Claude 4.5+ and 4.6 models.
     """
     return questionary.select(
-        "Select Effort Level:",
+        t("effort_select"),
         choices=[
-            questionary.Choice("High (recommended)", "high"),
-            questionary.Choice("Medium (balanced)", "medium"),
-            questionary.Choice("Low (faster, cheaper)", "low"),
+            questionary.Choice(t("effort_high_recommended"), "high"),
+            questionary.Choice(t("effort_medium_balanced"), "medium"),
+            questionary.Choice(t("effort_low_cheaper"), "low"),
         ],
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
@@ -345,10 +404,10 @@ def ask_gemini_thinking_config() -> str | None:
     Client maps to appropriate API param based on model series.
     """
     return questionary.select(
-        "Select Thinking Mode:",
+        t("thinking_mode_select"),
         choices=[
-            questionary.Choice("Enable Thinking (recommended)", "high"),
-            questionary.Choice("Minimal/Disable Thinking", "minimal"),
+            questionary.Choice(t("thinking_enabled"), "high"),
+            questionary.Choice(t("thinking_minimal"), "minimal"),
         ],
         style=questionary.Style([
             ("selected", "fg:green noinherit"),

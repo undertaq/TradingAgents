@@ -3,8 +3,10 @@ import time
 import json
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
+    get_language_instruction,
     get_indicators,
     get_stock_data,
+    is_tpm_constrained,
 )
 from tradingagents.dataflows.config import get_config
 
@@ -20,8 +22,15 @@ def create_market_analyst(llm):
             get_indicators,
         ]
 
-        system_message = (
-            """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
+        if is_tpm_constrained():
+            system_message = (
+                "You are a market analyst. Make at most 4 total tool calls in one turn: call `get_stock_data` once, then call `get_indicators` only for the most relevant 2 to 3 indicators. "
+                "Use exact indicator names such as `close_50_sma`, `close_200_sma`, `close_10_ema`, `macd`, `macds`, `macdh`, `rsi`, `boll`, "
+                "`boll_ub`, `boll_lb`, `atr`, and `vwma`. Avoid redundant indicators. Write a concise but evidence-based market report and end with a Markdown table."
+            )
+        else:
+            system_message = (
+                """You are a trading assistant tasked with analyzing financial markets. Your role is to select the **most relevant indicators** for a given market condition or trading strategy from the following list. The goal is to choose up to **8 indicators** that provide complementary insights without redundancy. Categories and each category's indicators are:
 
 Moving Averages:
 - close_50_sma: 50 SMA: A medium-term trend indicator. Usage: Identify trend direction and serve as dynamic support/resistance. Tips: It lags price; combine with faster indicators for timely signals.
@@ -46,8 +55,8 @@ Volume-Based Indicators:
 - vwma: VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume data. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses.
 
 - Select indicators that provide diverse and complementary information. Avoid redundancy (e.g., do not select both rsi and stochrsi). Also briefly explain why they are suitable for the given market context. When you tool call, please use the exact name of the indicators provided above as they are defined parameters, otherwise your call will fail. Please make sure to call get_stock_data first to retrieve the CSV that is needed to generate indicators. Then use get_indicators with the specific indicator names. Write a very detailed and nuanced report of the trends you observe. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."""
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
-        )
+                + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -60,7 +69,7 @@ Volume-Based Indicators:
                     " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
                     " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
                     " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    "For your reference, the current date is {current_date}. {instrument_context} {language_instruction}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
@@ -71,6 +80,7 @@ Volume-Based Indicators:
         prompt = prompt.partial(current_date=current_date)
         prompt = prompt.partial(instrument_context=instrument_context)
 
+        prompt = prompt.partial(language_instruction=get_language_instruction())
         chain = prompt | llm.bind_tools(tools)
 
         result = chain.invoke(state["messages"])

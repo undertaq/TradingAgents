@@ -123,6 +123,7 @@ TradingAgents supports multiple LLM providers. Set the API key for your chosen p
 
 ```bash
 export OPENAI_API_KEY=...          # OpenAI (GPT)
+export GROQ_API_KEY=...            # Groq
 export GOOGLE_API_KEY=...          # Google (Gemini)
 export ANTHROPIC_API_KEY=...       # Anthropic (Claude)
 export XAI_API_KEY=...             # xAI (Grok)
@@ -164,7 +165,7 @@ An interface will appear showing results as they load, letting you track the age
 
 ### Implementation Details
 
-We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Google, Anthropic, xAI, OpenRouter, and Ollama.
+We built TradingAgents with LangGraph to ensure flexibility and modularity. The framework supports multiple LLM providers: OpenAI, Groq, Google, Anthropic, xAI, OpenRouter, and Ollama.
 
 ### Python Usage
 
@@ -188,9 +189,10 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"        # openai, google, anthropic, xai, openrouter, ollama
-config["deep_think_llm"] = "gpt-5.2"     # Model for complex reasoning
-config["quick_think_llm"] = "gpt-5-mini" # Model for quick tasks
+config["llm_provider"] = "groq"                  # openai, groq, google, anthropic, xai, openrouter, ollama
+config["backend_url"] = "https://api.groq.com/openai/v1"
+config["deep_think_llm"] = "llama-3.3-70b-versatile"
+config["quick_think_llm"] = "llama-3.1-8b-instant"
 config["max_debate_rounds"] = 2
 
 ta = TradingAgentsGraph(debug=True, config=config)

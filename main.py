@@ -8,8 +8,10 @@ load_dotenv()
 
 # Create a custom config
 config = DEFAULT_CONFIG.copy()
-config["deep_think_llm"] = "gpt-5-mini"  # Use a different model
-config["quick_think_llm"] = "gpt-5-mini"  # Use a different model
+config["llm_provider"] = "groq"
+config["backend_url"] = "https://api.groq.com/openai/v1"
+config["deep_think_llm"] = "llama-3.3-70b-versatile"
+config["quick_think_llm"] = "llama-3.3-70b-versatile"
 config["max_debate_rounds"] = 1  # Increase debate rounds
 
 # Configure data vendors (default uses yfinance, no extra API keys needed)

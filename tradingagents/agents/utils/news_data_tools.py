@@ -2,6 +2,16 @@ from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
 
+
+def _coerce_int(value, default: int) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if value.isdigit():
+            return int(value)
+    return default
+
 @tool
 def get_news(
     ticker: Annotated[str, "Ticker symbol"],
@@ -23,8 +33,8 @@ def get_news(
 @tool
 def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
-    look_back_days: Annotated[int, "Number of days to look back"] = 7,
-    limit: Annotated[int, "Maximum number of articles to return"] = 5,
+    look_back_days: Annotated[str, "Number of days to look back"] = "7",
+    limit: Annotated[str, "Maximum number of articles to return"] = "5",
 ) -> str:
     """
     Retrieve global news data.
@@ -36,7 +46,12 @@ def get_global_news(
     Returns:
         str: A formatted string containing global news data
     """
-    return route_to_vendor("get_global_news", curr_date, look_back_days, limit)
+    return route_to_vendor(
+        "get_global_news",
+        curr_date,
+        _coerce_int(look_back_days, 7),
+        _coerce_int(limit, 5),
+    )
 
 @tool
 def get_insider_transactions(
